@@ -230,6 +230,44 @@ class WebSocketServer:
                         )
                         print("*", end="")
 
+                    elif data.get("type") == "image-data":
+                        print("Received image data from front end.")
+                        await websocket.send_text(
+                            json.dumps({"type": "full-text", "text": "正在分析图片..."})
+                        )
+                        
+                        image_data = data.get("image")
+                        
+                        async def _run_image_conversation():
+                            try:
+                                await websocket.send_text(
+                                    json.dumps(
+                                        {
+                                            "type": "thinking",
+                                            "text": "正在分析图片并思考回复...",
+                                        }
+                                    )
+                                )
+                                
+                                response = await open_llm_vtuber.process_image(image_data)
+                                
+                                await websocket.send_text(
+                                    json.dumps({"type": "full-text", "text": response})
+                                )
+                                
+                            except Exception as e:
+                                logger.error(f"Error processing image: {e}")
+                                await websocket.send_text(
+                                    json.dumps(
+                                        {
+                                            "type": "error",
+                                            "message": f"处理图片时出错: {str(e)}",
+                                        }
+                                    )
+                                )
+                        
+                        conversation_task = asyncio.create_task(_run_image_conversation())
+
                     elif (
                         data.get("type") == "mic-audio-end"
                         or data.get("type") == "text-input"

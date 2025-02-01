@@ -69,8 +69,60 @@
             <button id="micToggle">🎙️Mic is On</button>
             <button id="interruptBtn">❌Voice Interruption Off</button>
             <button id="sendText">📝Show Text Input</button>
+            <button id="takePhoto">📸拍照</button>
+            <button id="uploadImage">🖼️上传图片</button>
+            <input type="file" id="imageInput" accept="image/*" style="display: none;">
         </div>
     </div>
+
+    <!-- Camera Preview Modal -->
+    <div id="cameraModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <video id="cameraPreview" autoplay playsinline></video>
+            <canvas id="photoCanvas" style="display: none;"></canvas>
+            <div class="modal-buttons">
+                <button id="capturePhoto">拍照</button>
+                <button id="closeCamera">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+        }
+        
+        .modal-content {
+            position: relative;
+            margin: auto;
+            margin-top: 50px;
+            width: 80%;
+            max-width: 640px;
+        }
+        
+        .modal-buttons {
+            text-align: center;
+            margin-top: 10px;
+        }
+        
+        .modal-buttons button {
+            margin: 0 10px;
+            padding: 5px 15px;
+        }
+        
+        #cameraPreview {
+            width: 100%;
+            max-width: 640px;
+            background-color: #000;
+        }
+    </style>
 
     <!-- <script src="./modelDict.js"></script> -->
     <script src="./live2d.js"></script>
@@ -576,6 +628,105 @@
         textInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 handleTextSubmit();
+            }
+        });
+
+        // 图片处理相关变量
+        let stream = null;
+        const cameraModal = document.getElementById('cameraModal');
+        const cameraPreview = document.getElementById('cameraPreview');
+        const photoCanvas = document.getElementById('photoCanvas');
+        const capturePhotoBtn = document.getElementById('capturePhoto');
+        const closeCameraBtn = document.getElementById('closeCamera');
+        const takePhotoBtn = document.getElementById('takePhoto');
+        const uploadImageBtn = document.getElementById('uploadImage');
+        const imageInput = document.getElementById('imageInput');
+
+        // 拍照功能
+        takePhotoBtn.addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                cameraPreview.srcObject = stream;
+                cameraModal.style.display = 'block';
+            } catch (err) {
+                console.error('无法访问摄像头:', err);
+                alert('无法访问摄像头，请确保已授予摄像头权限。');
+            }
+        });
+
+        // 关闭摄像头
+        closeCameraBtn.addEventListener('click', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            cameraModal.style.display = 'none';
+        });
+
+        // 拍照
+        capturePhotoBtn.addEventListener('click', () => {
+            const context = photoCanvas.getContext('2d');
+            photoCanvas.width = cameraPreview.videoWidth;
+            photoCanvas.height = cameraPreview.videoHeight;
+            context.drawImage(cameraPreview, 0, 0, photoCanvas.width, photoCanvas.height);
+            
+            // 将图片转换为base64格式
+            const imageData = photoCanvas.toDataURL('image/jpeg');
+            
+            // 发送图片数据到服务器
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'image-data',
+                    image: imageData
+                }));
+            }
+            
+            // 关闭摄像头
+            closeCameraBtn.click();
+        });
+
+        // 上传图片
+        uploadImageBtn.addEventListener('click', () => {
+            imageInput.click();
+        });
+
+        // 处理图片上传
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const imageData = event.target.result;
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'image-data',
+                            image: imageData
+                        }));
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 支持粘贴图片
+        document.addEventListener('paste', (e) => {
+            const items = e.clipboardData.items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const file = items[i].getAsFile();
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const imageData = event.target.result;
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({
+                                type: 'image-data',
+                                image: imageData
+                            }));
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                    break;
+                }
             }
         });
     </script>

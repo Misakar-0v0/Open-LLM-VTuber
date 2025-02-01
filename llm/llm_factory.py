@@ -19,6 +19,10 @@ class LLMFactory:
                 project_id=kwargs.get("PROJECT_ID"),
                 organization_id=kwargs.get("ORGANIZATION_ID"),
                 verbose=kwargs.get("VERBOSE", False),
+                use_azure=kwargs.get("USE_AZURE", False),
+                azure_endpoint=kwargs.get("AZURE_ENDPOINT"),
+                azure_api_version=kwargs.get("AZURE_API_VERSION"),
+                azure_api_key=kwargs.get("AZURE_API_KEY"),
             )
         elif llm_provider == "llamacpp":
             from .llamacpp_llm import LLM as LlamaLLM
@@ -38,7 +42,11 @@ class LLMFactory:
                 project_id=kwargs.get("PROJECT_ID"),
                 organization_id=kwargs.get("ORGANIZATION_ID"),
                 mem0_config=kwargs.get("MEM0_CONFIG"),
-                verbose=kwargs.get("VERBOSE", False)
+                verbose=kwargs.get("VERBOSE", False),
+                use_azure=kwargs.get("USE_AZURE", False),
+                azure_endpoint=kwargs.get("AZURE_ENDPOINT"),
+                azure_api_version=kwargs.get("AZURE_API_VERSION"),
+                azure_api_key=kwargs.get("AZURE_API_KEY"),
             )
         elif llm_provider == "memgpt":
             return MemGPTLLM(

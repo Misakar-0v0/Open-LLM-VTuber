@@ -7,7 +7,7 @@ OpenAI, and more.
 
 from typing import Iterator
 import json
-from openai import OpenAI
+from openai import OpenAI, AzureOpenAI
 
 from .llm_interface import LLMInterface
 
@@ -24,6 +24,10 @@ class LLM(LLMInterface):
         project_id: str = "z",
         llm_api_key: str = "z",
         verbose: bool = False,
+        use_azure: bool = False,
+        azure_endpoint: str = "z",
+        azure_api_version: str = "z",
+        azure_api_key: str = "z"
     ):
         """
         Initializes an instance of the `ollama` class.
@@ -45,12 +49,19 @@ class LLM(LLMInterface):
         self.callback = callback
         self.memory = []
         self.verbose = verbose
-        self.client = OpenAI(
-            base_url=base_url,
-            organization=organization_id,
-            project=project_id,
-            api_key=llm_api_key,
-        )
+        if not use_azure:
+            self.client = OpenAI(
+                base_url=base_url,
+                organization=organization_id,
+                project=project_id,
+                api_key=llm_api_key,
+            )
+        else:
+            self.client = AzureOpenAI(
+                azure_endpoint=azure_endpoint,
+                api_version=azure_api_version,
+                api_key=azure_api_key,
+            )
 
         self.__set_system(system)
 
@@ -138,6 +149,78 @@ class LLM(LLMInterface):
             return
 
         return _generate_and_store_response()
+
+    def chat_with_image(self, image_data: str) -> Iterator[str]:
+        """
+        处理图片并返回回复的迭代器
+        
+        Parameters:
+        - image_data (str): base64编码的图片数据
+        
+        Returns:
+        - Iterator[str]: AI回复的迭代器
+        """
+        # 构建包含图片的消息
+        self.memory.append(
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "请说出你看到这张图片后的感想"
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": image_data
+                        }
+                    }
+                ]
+            }
+        )
+        
+        if self.verbose:
+            self.__print_memory()
+            print(" -- Base URL: " + self.base_url)
+            print(" -- Model: " + self.model)
+            print(" -- System: " + self.system)
+            print(" -- Image data received")
+
+        try:
+            chat_completion = self.client.chat.completions.create(
+                messages=self.memory,
+                model=self.model,
+                stream=True,
+            )
+            
+            def _generate_and_store_response():
+                complete_response = ""
+                for chunk in chat_completion:
+                    if chunk.choices[0].delta.content is None:
+                        chunk.choices[0].delta.content = ""
+                    yield chunk.choices[0].delta.content
+                    complete_response += chunk.choices[0].delta.content
+
+                self.memory.append(
+                    {
+                        "role": "assistant",
+                        "content": complete_response,
+                    }
+                )
+
+                def serialize_memory(memory, filename):
+                    with open(filename, "w") as file:
+                        json.dump(memory, file)
+
+                serialize_memory(self.memory, "mem.json")
+                return
+
+            return _generate_and_store_response()
+            
+        except Exception as e:
+            print("Error processing image: " + str(e))
+            self.__printDebugInfo()
+            raise e
 
     def handle_interrupt(self, heard_response: str) -> None:
         if self.memory[-1]["role"] == "assistant":

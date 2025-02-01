@@ -9,6 +9,7 @@ from openai import OpenAI
 from loguru import logger
 from .llm_interface import LLMInterface
 import json
+import os
 
 
 class LLM(LLMInterface):
@@ -24,34 +25,42 @@ class LLM(LLMInterface):
         project_id: str = "z",
         llm_api_key: str = "z",
         verbose: bool = False,
+        use_azure: bool = False,
+        azure_endpoint: str = "z",
+        azure_api_version: str = "z",
+        azure_api_key: str = "z"
     ):
-        """
-        Initializes an instance of the `ollama` class.
-
-        Parameters:
-        - base_url (str): The base URL for the OpenAI API.
-        - model (str): The model to be used for language generation.
-        - system (str): The system to be used for language generation.
-        - organization_id (str, optional): The organization ID for the OpenAI API. Defaults to an empty string.
-        - project_id (str, optional): The project ID for the OpenAI API. Defaults to an empty string.
-        - llm_api_key (str, optional): The API key for the OpenAI API. Defaults to an empty string.
-        - verbose (bool, optional): Whether to enable verbose mode. Defaults to `False`.
-        """
-
         self.base_url = base_url
         self.model = model
         self.system = system
         self.mem0_config = mem0_config
         self.user_id = user_id
 
+        # 处理neo4j配置
+        if 'graph_store' in self.mem0_config and self.mem0_config['graph_store']['provider'] == 'neo4j':
+            config = self.mem0_config['graph_store']['config']
+            if '${NEO4JPASS}' in config['password']:
+                neo4j_pass = os.getenv('NEO4JPASS')
+                if not neo4j_pass:
+                    raise ValueError("环境变量NEO4JPASS未设置，请设置Neo4j数据库密码")
+                config['password'] = neo4j_pass
+                logger.info("已从环境变量中读取Neo4j密码")
+
         self.conversation_memory = []
         self.verbose = verbose
-        self.client = OpenAI(
-            base_url=base_url,
-            organization=organization_id,
-            project=project_id,
-            api_key=llm_api_key,
-        )
+        if not use_azure:
+            self.client = OpenAI(
+                base_url=base_url,
+                organization=organization_id,
+                project=project_id,
+                api_key=llm_api_key,
+            )
+        else:
+            self.client = AzureOpenAI(
+                azure_endpoint=azure_endpoint,
+                api_version=azure_api_version,
+                api_key=azure_api_key,
+            )
 
         self.system = system
         self.conversation_memory = [
@@ -66,27 +75,21 @@ class LLM(LLMInterface):
         self.mem0 = Memory.from_config(self.mem0_config)
         logger.debug("Memory Initialized...")
 
-        # Add a memory
-        # self.mem0.add("I'm visiting Paris", user_id="john")
-
-    def chat_iter(self, prompt: str) -> Iterator[str]:
-
-        logger.debug("All Mem:")
-        logger.debug(self.mem0.get_all(user_id=self.user_id))
-
-        # Get relevant memory
-
+    def _get_relevant_memories(self, query: str) -> str:
+        """获取相关记忆"""
+        logger.debug("Searching relevant memories...")
         relevant_memories_list = self.mem0.search(
-            query=prompt, limit=10, user_id=self.user_id
+            query=query, limit=10, user_id=self.user_id
         )
-        relevant_memories = ""
-        if relevant_memories_list:
-            relevant_memories = "\n".join(
-                mem["memory"] for mem in relevant_memories_list
-            )
+        if not relevant_memories_list:
+            return ""
+        
+        return "\n".join(mem["memory"] for mem in relevant_memories_list)
 
+    def _update_system_prompt(self, relevant_memories: str):
+        """更新系统提示词，加入相关记忆"""
         if relevant_memories:
-            logger.debug("Relevant memories found...")
+            logger.debug("Adding relevant memories to system prompt...")
             self.conversation_memory[0] = {
                 "role": "system",
                 "content": f"""{self.system}
@@ -106,8 +109,15 @@ class LLM(LLMInterface):
                 "content": f"""{self.system}""",
             }
 
-        logger.debug("System:")
-        logger.debug(self.conversation_memory[0])
+    def chat_iter(self, prompt: str) -> Iterator[str]:
+        logger.debug("All Mem:")
+        logger.debug(self.mem0.get_all(user_id=self.user_id))
+
+        # 获取相关记忆
+        relevant_memories = self._get_relevant_memories(prompt)
+        
+        # 更新系统提示词
+        self._update_system_prompt(relevant_memories)
 
         self.conversation_memory.append(
             {
@@ -137,8 +147,6 @@ class LLM(LLMInterface):
             logger.error(self.mem0_config)
             return "Error calling the chat endpoint: " + str(e)
 
-        # a generator to give back an iterator to the response that will store
-        # the complete response in memory once the iteration is done
         def _generate_and_store_response():
             complete_response = ""
             for chunk in chat_completion:
@@ -168,6 +176,83 @@ class LLM(LLMInterface):
 
             logger.debug("All Mem:")
             logger.debug(self.mem0.get_all(user_id=self.user_id))
+
+            def serialize_memory(memory, filename):
+                with open(filename, "w") as file:
+                    json.dump(memory, file)
+
+            serialize_memory(self.conversation_memory, "mem.json")
+            return
+
+        return _generate_and_store_response()
+
+    def chat_with_image(self, image_data: str) -> Iterator[str]:
+        """处理图片对话并返回回复的迭代器
+        
+        Parameters:
+        - image_data (str): base64编码的图片数据
+        
+        Returns:
+        - Iterator[str]: AI回复的迭代器
+        """
+        # 获取与图片相关的记忆
+        relevant_memories = self._get_relevant_memories("图片对话")
+        
+        # 更新系统提示词
+        self._update_system_prompt(relevant_memories)
+
+        # 构建包含图片的消息
+        image_message = {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "请描述这张图片，并告诉我你的感想"
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": image_data
+                    }
+                }
+            ]
+        }
+        
+        self.conversation_memory.append(image_message)
+        this_conversation_mem = [image_message]
+
+        try:
+            logger.debug("Calling the chat endpoint with...")
+            logger.debug(self.conversation_memory)
+            chat_completion = self.client.chat.completions.create(
+                messages=self.conversation_memory,
+                model=self.model,
+                stream=True,
+            )
+        except Exception as e:
+            logger.error("Error calling the chat endpoint: " + str(e))
+            logger.error(self.mem0_config)
+            return "Error calling the chat endpoint: " + str(e)
+
+        def _generate_and_store_response():
+            complete_response = ""
+            for chunk in chat_completion:
+                if chunk.choices[0].delta.content is None:
+                    chunk.choices[0].delta.content = ""
+                yield chunk.choices[0].delta.content
+                complete_response += chunk.choices[0].delta.content
+
+            assistant_response = {
+                "role": "assistant",
+                "content": complete_response,
+            }
+            
+            self.conversation_memory.append(assistant_response)
+            this_conversation_mem.append(assistant_response)
+
+            # 将对话添加到记忆中
+            logger.debug(self.mem0.add(this_conversation_mem, user_id=self.user_id))
+            logger.debug(f"Mem0 Added... {this_conversation_mem}")
 
             def serialize_memory(memory, filename):
                 with open(filename, "w") as file:
