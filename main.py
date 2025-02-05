@@ -447,7 +447,6 @@ class OpenLLMVTuberMain:
                     f"Producer error: Error generating audio for sentence: '{sentence_buffer}'.\n{e}",
                     "Producer stopped\n",
                 )
-                return
             finally:
                 task_queue.put(None)  # Signal end of production
 
@@ -623,6 +622,37 @@ class OpenLLMVTuberMain:
                 return None
         else:
             return None
+
+    async def process_image(self, image_data: str) -> str:
+        """
+        处理图片数据并返回LLM的回复
+        
+        Parameters:
+        - image_data (str): base64编码的图片数据
+        
+        Returns:
+        - str: LLM的回复
+        """
+        try:
+            # 调用LLM处理图片
+            chat_completion = self.llm.chat_with_image(image_data)
+            
+            # 如果启用了TTS，则使用speak_by_sentence_chain处理回复
+            if self.config.get("TTS_ON", False):
+                full_response = self.speak_by_sentence_chain(chat_completion)
+            else:
+                # 如果没有启用TTS，则直接返回完整回复
+                full_response = ""
+                for char in chat_completion:
+                    if not self._continue_exec_flag.is_set():
+                        break
+                    full_response += char
+                    
+            return full_response
+            
+        except Exception as e:
+            logger.error(f"处理图片时出错: {e}")
+            raise e
 
 
 def load_config_with_env(path) -> dict:

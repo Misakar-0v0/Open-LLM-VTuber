@@ -18,6 +18,20 @@ class LLMInterface(metaclass=abc.ABCMeta):
         """
         raise NotImplementedError
 
+    @abc.abstractmethod
+    def chat_with_image(self, image_data: str) -> Iterator[str]:
+        """
+        处理图片并返回回复的迭代器。
+        此函数需要将图片和AI的回复存储到记忆中。
+
+        Parameters:
+        - image_data (str): base64编码的图片数据
+
+        Returns:
+        - Iterator[str]: AI回复的迭代器
+        """
+        raise NotImplementedError
+
     def handle_interrupt(self, heard_response: str) -> None:
         """
         This function will be called when the LLM is interrupted by the user.

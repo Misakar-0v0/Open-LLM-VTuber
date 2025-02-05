@@ -17,7 +17,7 @@ REMOVE_SPECIAL_CHAR: True # remove special characters like emoji from audio gene
 # Provider of LLM. Options available: "ollama", "memgpt", "mem0", "claude", "llamacpp"
 #   (or "fakellm for debug purposes")
 # "ollama" for any OpenAI Compatible backend. "memgpt" requires setup
-LLM_PROVIDER: "ollama"
+LLM_PROVIDER: "mem0"
 
 # Ollama & OpenAI Compatible inference backend
 ollama:

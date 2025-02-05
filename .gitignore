@@ -46,3 +46,5 @@ openapi_memgpt.json
 # memory log
 mem.json
 conf.yaml.backup
+.mem_milvus.db.lock
+mem_milvus.db
