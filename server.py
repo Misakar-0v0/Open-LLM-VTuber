@@ -4,7 +4,7 @@ import shutil
 import atexit
 import json
 import asyncio
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import yaml
 import numpy as np
 import chardet
@@ -17,6 +17,7 @@ from main import OpenLLMVTuberMain
 from live2d_model import Live2dModel
 from tts.stream_audio import AudioPayloadPreparer
 import __init__
+from webcam import WebcamStream
 
 
 class WebSocketServer:
@@ -31,11 +32,12 @@ class WebSocketServer:
         server_ws_clients (List[WebSocket]): List of connected WebSocket clients for "/server-ws".
     """
 
-    def __init__(self, open_llm_vtuber_main_config: Dict | None = None):
+    def __init__(self, open_llm_vtuber_main_config: Dict | None = None, webcam: Optional[WebcamStream]=None):
         """
         Initializes the WebSocketServer with the given configuration.
         """
         logger.info(f"t41372/Open-LLM-VTuber, version {__init__.__version__}")
+        self.webcam = webcam
         self.app = FastAPI()
         # Add CORS middleware
         self.app.add_middleware(
@@ -47,7 +49,7 @@ class WebSocketServer:
         )
         self.router = APIRouter()
         self.connected_clients: List[WebSocket] = []
-        
+
         
         self.open_llm_vtuber_main_config = open_llm_vtuber_main_config
 
@@ -296,6 +298,9 @@ class WebSocketServer:
                                 await asyncio.to_thread(
                                     open_llm_vtuber.conversation_chain,
                                     user_input=user_input,
+                                    # image_data=self.webcam.read(encode=True),
+                                    image_data=None,
+                                    image_list=self.webcam.capture_frames(num_frames=5)
                                 )
                                 await websocket.send_text(
                                     json.dumps(
@@ -632,6 +637,10 @@ if __name__ == "__main__":
 
     config["LIVE2D"] = True  # make sure the live2d is enabled
 
+    # 初始化摄像头
+    webcam = WebcamStream().start()
+    atexit.register(webcam.stop)
+
     # Initialize and run the WebSocket server
-    server = WebSocketServer(open_llm_vtuber_main_config=config)
+    server = WebSocketServer(open_llm_vtuber_main_config=config, webcam=webcam)
     server.run(host=config["HOST"], port=config["PORT"])

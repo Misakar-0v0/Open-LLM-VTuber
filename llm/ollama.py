@@ -9,8 +9,7 @@ import os
 import json
 import pickle
 from pathlib import Path
-from tempfile import template
-from typing import Iterator
+from typing import Iterator, Optional
 from openai import OpenAI, AzureOpenAI
 from langchain import PromptTemplate
 from langchain_openai import AzureChatOpenAI
@@ -152,7 +151,7 @@ class LLM(LLMInterface):
         print(" -- Model: " + self.model)
         print(" -- System: " + self.system)
 
-    def chat_iter(self, prompt: str) -> Iterator[str]:
+    def chat_iter(self, prompt: str, image_data: Optional[str]=None, image_list=None) -> Iterator[str]:
 
         self.memory.append(
             {
@@ -160,7 +159,6 @@ class LLM(LLMInterface):
                 "content": prompt,
             }
         )
-
         messages = deepcopy(self.memory)
 
         # 检索添加记忆
@@ -195,7 +193,7 @@ class LLM(LLMInterface):
             collection_name=self.mem_collection_name,
             data = [query_embedding],
             output_fields=["source", "source_time", "memory_time", "content", "delete"],
-            limit = 10,
+            limit = 50,
         )[0]
         memories = ""
         for result in mem_results:
@@ -208,13 +206,44 @@ class LLM(LLMInterface):
         if memories:
             messages[0]["content"] += f"\n你有如下长期记忆:\n{memories}"
 
+        if image_data:
+            messages.append({
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_data.decode()}",
+                        }
+                    }
+                ]
+            })
+
+        print("image_list==>", len(image_list))
+        print("image_list==>", [image["frame_time"] for image in image_list])
+        if image_list:
+            messages.append({
+                "role": "user",
+                "content": []
+            })
+            for idx, image in enumerate(image_list):
+                messages[-1]["content"].append({
+                    "type": "text",
+                    "text": f"下面是第{idx}帧，截取时间是{image['frame_time']}"
+                })
+                messages[-1]["content"].append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{image['frame'].decode()}"
+                    }
+                })
+
+        self.verbose = True
         if self.verbose:
-            self.__print_memory()
+            # self.__print_memory()
             print(" -- Base URL: " + self.base_url)
             print(" -- Model: " + self.model)
-            # print(" -- System: " + self.system)
-            print(" -- System: " + messages[0]["content"])
-            print(" -- Prompt: " + prompt + "\n\n")
+            # print(" -- Messages: ", messages)
 
         chat_completion = []
         try:
@@ -274,16 +303,16 @@ class LLM(LLMInterface):
             {
                 "role": "user",
                 "content": [
-                    {
-                        "type": "text",
-                        "text": "请说出你看到这张图片后的感想"
-                    },
+                    # {
+                    #     "type": "text",
+                    #     "text": "请说出你看到这张图片后的感想"
+                    # },
                     {
                         "type": "image_url",
                         "image_url": {
                             "url": image_data
                         }
-                    }
+                    },
                 ]
             }
         )

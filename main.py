@@ -7,7 +7,7 @@ import atexit
 import threading
 import queue
 import uuid
-from typing import Callable, Iterator, Optional
+from typing import Callable, Iterator, Optional, List
 from loguru import logger
 import numpy as np
 import yaml
@@ -192,7 +192,7 @@ class OpenLLMVTuberMain:
 
     # Main conversation methods
 
-    def conversation_chain(self, user_input: str | np.ndarray | None = None) -> str:
+    def conversation_chain(self, user_input: str | np.ndarray | None = None, image_data: str | None = None, image_list=None) -> str:
         """
         One iteration of the main conversation.
         1. Get user input (text or audio) if not provided as an argument
@@ -205,6 +205,9 @@ class OpenLLMVTuberMain:
         Returns:
         - str: The full response from the LLM
         """
+
+        if image_list is None:
+            image_list = []
 
         if not self._continue_exec_flag.wait(
             timeout=self.EXEC_FLAG_CHECK_TIMEOUT
@@ -242,7 +245,7 @@ class OpenLLMVTuberMain:
 
         print(f"User input: {user_input}")
 
-        chat_completion: Iterator[str] = self.llm.chat_iter(user_input)
+        chat_completion: Iterator[str] = self.llm.chat_iter(user_input, image_data, image_list)
 
         if not self.config.get("TTS_ON", False):
             full_response = ""

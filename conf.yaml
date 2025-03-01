@@ -32,13 +32,12 @@ ollama:
   # MODEL: "gpt-4o"
   MODEL: "gpt-4o-2024-08-06"
   # system prompt is at the very end of this file
-  VERBOSE: False
+  VERBOSE: True
   # azure
   USE_AZURE: True
-  AZURE_ENDPOINT: "https://search.bytedance.net/gpt/openapi/online/v2/crawl"
-  AZURE_API_VERSION: "2023-07-01-preview"
-  AZURE_API_KEY: "CKUgW0Wg5Igp4OWVIUfXAE40z7XWwSvt"
-
+  AZURE_ENDPOINT: ""
+  AZURE_API_VERSION: ""
+  AZURE_API_KEY: ""
 
 # Claude API Configuration
 claude:
@@ -64,9 +63,9 @@ mem0:
   VERBOSE: False
   # azure
   USE_AZURE: True
-  AZURE_ENDPOINT: "https://search.bytedance.net/gpt/openapi/online/v2/crawl"
-  AZURE_API_VERSION: "2023-07-01-preview"
-  AZURE_API_KEY: "CKUgW0Wg5Igp4OWVIUfXAE40z7XWwSvt"
+  AZURE_ENDPOINT: ""
+  AZURE_API_VERSION: ""
+  AZURE_API_KEY: ""
 
   MEM0_CONFIG:
     graph_store:
@@ -76,27 +75,6 @@ mem0:
         username: neo4j
         password: ${NEO4JPASS}
     version: v1.1
-    # llm:
-    #   provider: ollama
-    #   config:
-    #     # model: llama3.1:latest
-    #     temperature: 0
-    #     max_tokens: 8000
-    #     # ollama_base_url: http://localhost:11434  # Ensure this URL is correct
-    #     model: "gpt-4o-2024-08-06"
-    #     # azure
-    #     use_azure: True
-    #     azure_endpoint: "https://search.bytedance.net/gpt/openapi/online/v2/crawl"
-    #     azure_api_version: "2023-07-01-preview"
-    #     azure_api_key: "CKUgW0Wg5Igp4OWVIUfXAE40z7XWwSvt"
-
-    # embedder:
-    #   provider: ollama
-    #   config:
-    #     model: mxbai-embed-large:latest
-    #     # Alternatively, you can use "snowflake-arctic-embed:latest"
-    #     ollama_base_url: http://localhost:11434
-
 # MemGPT Configurations
 ## Please set up memGPT server according to the [official documentation](https://memgpt.readme.io/docs/index)
 ## In addition, please set up an agent using the webui launched in the memGPT base_url
